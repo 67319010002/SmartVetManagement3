@@ -6,14 +6,23 @@ const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-// สร้างโฟลเดอร์ uploads ถ้ายังไม่มี (ใช้งานเฉพาะ local)
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// ─── Uploads Directory ───────────────────────────────────────────
+// Vercel มี Read-Only filesystem → ใช้ /tmp แทนบน Production
+const uploadDir = IS_PRODUCTION
+  ? '/tmp/uploads'
+  : path.join(__dirname, 'uploads');
+
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn('Could not create uploads dir:', e.message);
 }
 
-// CORS - รองรับทั้ง Local และ Production
+// ─── CORS ─────────────────────────────────────────────────────────
 const allowedOrigins = [
   'http://localhost:3000',
   process.env.FRONTEND_URL,
@@ -21,12 +30,8 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    // อนุญาต requests ที่ไม่มี origin (เช่น mobile apps, curl)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.some(o => origin.startsWith(o))) {
-      return callback(null, true);
-    }
-    // อนุญาต Vercel preview deployments
+    if (allowedOrigins.some(o => origin.startsWith(o))) return callback(null, true);
     if (origin.includes('vercel.app')) return callback(null, true);
     callback(new Error('CORS policy violation'));
   },
@@ -36,43 +41,36 @@ app.use(cors({
 app.use(express.json());
 app.use('/uploads', express.static(uploadDir));
 
-// Health check route
+// ─── Health Check ─────────────────────────────────────────────────
 app.get('/', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     message: 'Smart Pet Management API is running',
-    env: process.env.NODE_ENV || 'development'
+    env: process.env.NODE_ENV || 'development',
+    db: process.env.DATABASE_URL ? 'configured' : 'NOT CONFIGURED ⚠️',
   });
 });
 
-// API Routes
+// ─── API Routes ───────────────────────────────────────────────────
 app.use('/api/auth', require('./src/routes/authRoutes'));
 app.use('/api/pets', require('./src/routes/petRoutes'));
 app.use('/api/appointments', require('./src/routes/appointmentRoutes'));
 app.use('/api/records', require('./src/routes/medicalRecordRoutes'));
 
-// 404 handler
+// ─── Error Handlers ───────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ message: `Route ${req.originalUrl} not found` });
 });
 
-// Global error handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Internal Server Error' });
+  console.error('GLOBAL_ERROR:', err.message);
+  res.status(500).json({ message: 'Internal Server Error', error: err.message });
 });
 
-// Export for Vercel serverless
-module.exports = app;
+// ─── Start Server ─────────────────────────────────────────────────
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
+});
 
-// Listen locally (ไม่ทำงานบน Vercel)
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => {
-    console.log(`✅ Server running on http://localhost:${PORT}`);
-  });
-} else {
-  // Production: still listen for Render/Railway compatibility
-  app.listen(PORT, () => {
-    console.log(`✅ Server running on port ${PORT}`);
-  });
-}
+// Export for Vercel Serverless
+module.exports = app;

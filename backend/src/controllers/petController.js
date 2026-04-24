@@ -27,9 +27,10 @@ const registerPet = async (req, res) => {
     const validatedData = petSchema.parse(bodyData);
     
     // จัดการรูปภาพ (ถ้ามี)
-    let imageUrl = req.body.imageUrl; // เผื่อกรณีส่ง URL มาตรงๆ
+    let imageUrl = req.body.imageUrl;
     if (req.file) {
-      imageUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+      const baseUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+      imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
     }
 
     const pet = await prisma.pet.create({
