@@ -1,15 +1,14 @@
-require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
-const { PrismaPg } = require('@prisma/adapter-pg');
-const { Pool } = require('pg');
 
-// 1. สร้าง Pool สำหรับการเชื่อมต่อ
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Singleton pattern สำหรับ Serverless (ป้องกัน connection limit)
+const globalForPrisma = globalThis;
 
-// 2. สร้าง Adapter
-const adapter = new PrismaPg(pool);
+const prisma = globalForPrisma.prisma ?? new PrismaClient({
+  log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+});
 
-// 3. ส่ง Adapter ให้ PrismaClient (มาตรฐาน Prisma 7)
-const prisma = new PrismaClient({ adapter });
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+}
 
 module.exports = prisma;
