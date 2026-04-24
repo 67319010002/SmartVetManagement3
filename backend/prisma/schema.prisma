@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  VET
+  OWNER
+}
+
+model User {
+  id           Int           @id @default(autoincrement())
+  email        String        @unique
+  password     String
+  name         String
+  role         Role          @default(OWNER)
+  pets         Pet[]
+  appointments Appointment[] @relation("VetAppointments")
+  records      MedicalRecord[] @relation("VetRecords")
+  createdAt    DateTime      @default(now())
+}
+
+model Pet {
+  id           Int           @id @default(autoincrement())
+  name         String
+  species      String
+  breed        String?
+  age          Int?          // ปี
+  ageMonths    Int?          @default(0) // เดือน
+  ageDays      Int?          @default(0) // วัน
+  imageUrl     String?       // เพิ่มฟิลด์สำหรับรูปภาพ
+  ownerId      Int
+  owner        User          @relation(fields: [ownerId], references: [id])
+  appointments Appointment[]
+  records      MedicalRecord[]
+  createdAt    DateTime      @default(now())
+}
+
+model Appointment {
+  id           Int           @id @default(autoincrement())
+  dateTime     DateTime
+  status       String        @default("SCHEDULED") // SCHEDULED, COMPLETED, CANCELLED
+  reason       String?
+  petId        Int
+  pet          Pet           @relation(fields: [petId], references: [id])
+  vetId        Int
+  vet          User          @relation("VetAppointments", fields: [vetId], references: [id])
+  medicalRecord MedicalRecord?
+  createdAt    DateTime      @default(now())
+
+  @@unique([vetId, dateTime]) // ป้องกันหมอโดนจองซ้ำเวลาเดียวกัน
+}
+
+model MedicalRecord {
+  id           Int           @id @default(autoincrement())
+  diagnosis    String
+  treatment    String?
+  notes        String?
+  petId        Int
+  pet          Pet           @relation(fields: [petId], references: [id])
+  vetId        Int
+  vet          User          @relation("VetRecords", fields: [vetId], references: [id])
+  appointmentId Int?         @unique
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
+  createdAt    DateTime      @default(now())
+}
